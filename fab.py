@@ -3,6 +3,13 @@ import shlex
 from os import stat
 
 
+def get_mtime(name):
+    try:
+        return stat(name).st_mtime
+    except FileNotFoundError:
+        return None
+
+
 class Target(object):
     def __init__(self, name, *, cmd=[], dep=[], idep=[], children=[]):
         self.name = name
@@ -13,10 +20,7 @@ class Target(object):
 
     @property
     def mtime(self):
-        try:
-            return stat(self.name).st_mtime
-        except FileNotFoundError:
-            return None
+        return get_mtime(self.name)
 
     def build(self, *, mtime=None):
         stale = False
