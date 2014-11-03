@@ -1,16 +1,16 @@
-#!/usr/bin/env python3
+from fab import Group, Rewrite, Rule
 
 
-from fab import Target
+g = Group(
+    mods=[
+        Rewrite('%?.o', '.obj/%?.o'),
+    ],
+    rules=[
+        Rule('x', ('touch x',), dep=('a.c', 'b.c')),
+        Rule('%?.o', ('touch %?.o',), dep=('%?.c',), rules=[
+            Rule('%?.c', idep=('%?.h',)),
+        ]),
+    ],
+)
 
-
-if __name__ == '__main__':
-    t = Target(
-        'x', cmd=['cat a b >x'],
-        dep=[
-            Target('a', cmd=['echo line one >a']),
-            Target('b', cmd=['echo line two >b']),
-        ]
-    )
-
-    t.build()
+g.build('a.c')
