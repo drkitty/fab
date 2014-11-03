@@ -14,22 +14,24 @@ def get_mtime(name):
 def pattern_to_re(pattern):
     if pattern.find('%?') != pattern.rfind('%?'):
         raise Exception("Repeated '%?' in pattern not allowed")
-    return re.compile(re.escape(pattern).replace(r'\%\?', '([^/]*)'))
+    return re.compile(re.escape(pattern).replace(r'\%\?', '([^/]*)') + '$')
 
 
 class Group(object):
-    def __init__(self, *, mods=[], rules=[]):
+    def __init__(self, *, mods=[], rules=[], parent=None):
         self.mods = mods
         self.rules = rules
+        self.parent = parent
+
+    def modify(self, name):
+        for mod in self.mods:
+            name = mod.modify(name)
+        if self.parent:
+            name = self.parent.modify(name)
+        return name
 
     def build(self, name):
-        new_name = name
-        while True:
-            for mod in mods:
-                new_name = tf.modify(new_name)
-            if new_name == name:
-                break
-            name = new_name
+        name = self.modify(name)
 
         mtime = get_mtime(self.name)
 
@@ -70,4 +72,4 @@ class Rewrite(Mod):
             if m is None:
                 return name
             else:
-                return self.name2.replace('%?', m.groups()[0])
+                return self.name2.replace('%?', m.group(0))
