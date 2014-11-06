@@ -8,7 +8,7 @@ def get_mtime(name):
     try:
         return stat(name).st_mtime
     except FileNotFoundError:
-        return None
+        return 0
 
 
 def pattern_to_re(pattern):
@@ -30,11 +30,11 @@ class Group(object):
 
     def search(self, name):
         for rule in self.rules:
-            if isinstance(rule.name, str):
-                if rule.name == name:
+            if rule.regex:
+                if rule.regex.match(name):
                     return rule
             else:
-                if rule.name.match(name):
+                if rule.name == name:
                     return rule
         if self.parent:
             return self.parent.search(name)
@@ -50,7 +50,6 @@ class Group(object):
         name = self.modify(name)
 
         for rule in self.rules:
-            print("Looking at rule for '{}'".format(rule.name))
             mtime = rule.build(name)
             if mtime:
                 return mtime
@@ -60,36 +59,31 @@ class Rule(Group):
     def __init__(self, name, cmds=(), deps=(), ideps=(), **kwargs):
         super().__init__(**kwargs)
 
+        self.name = name
         if '%?' in name:
-            self.name = pattern_to_re(name)
+            self.regex = pattern_to_re(name)
         else:
-            self.name = name
+            self.regex = None
         self.cmds = cmds
         self.deps = deps
         self.ideps = ideps
 
     def __repr__(self):
-        if isinstance(self.name, str):
-            return "<Rule: '{}'>".format(self.name)
-        else:
-            return "<Rule: '{}'>".format(self.name.pattern)
+        return "<Rule: '{}'>".format(self.name)
 
     def build(self, name):
         """Build `name` if possible and necessary
 
-        Returns the mtime of `name` if it's now up to date, or None otherwise.
+        Returns the mtime of `name` if it's now up to date, or 0 otherwise.
         """
 
-        if isinstance(self.name, str):
-            if self.name != name:
-                return None
-            deps = self.deps
-            ideps = self.ideps
-        else:
-            m = self.name.match(name)
+        print("Considering building '{}' with {}".format(name, repr(self)))
+
+        if self.regex:
+            m = self.regex.match(name)
             if m is None:
                 return None
-            q = m.group(0)
+            q = m.group(1)
 
             deps = list(self.deps)
             for i in range(len(deps)):
@@ -97,37 +91,49 @@ class Rule(Group):
             ideps = list(self.ideps)
             for i in range(len(ideps)):
                 ideps[i] = ideps[i].replace('%?', q)
-
-        deps = filter(None, (self.search(dep) for dep in deps))
-        ideps = filter(None, (self.search(idep) for idep in ideps))
+        else:
+            if self.name != name:
+                return None
+            deps = self.deps
+            ideps = self.ideps
 
         mtime = get_mtime(name)
+        fake_mtime = 0
 
-        stale = mtime is None
+        stale = not mtime
 
         for dep in deps:
-            print("Looking at dep '{}'".format(dep.name))
-            dep_mtime = dep.build(name)
-            if dep_mtime and dep_mtime > mtime:
+            dep_rule = self.search(dep)
+            if dep_rule is None:
+                return None
+            print("Looking at dep '{}' of {}".format(dep, repr(self)))
+            dep_mtime = dep_rule.build(dep)
+            if not dep_mtime:
+                return 0
+            if dep_mtime > mtime:
                 stale = True
 
         if not stale:
             for idep in ideps:
-                print("Looking at idep '{}'".format(idep.name))
-                if get_mtime(idep):
+                print("Looking at idep '{}' of {}".format(
+                    idep, repr(self)))
+                idep_mtime = get_mtime(idep)
+                if idep_mtime > mtime:
                     stale = True
+                    mtime = max(mtime, idep_mtime)
                     break
 
         if stale:
-            self.run_commands()
+            self.run_commands(name)
             mtime = get_mtime(name)
 
         return mtime
 
-    def run_commands(self, q=None):
+    def run_commands(self, name):
         for cmd in self.cmds:
-            if q:
-                cmd = cmd.replace('%?', q)
+            if name:
+                cmd = cmd.replace('%@', name)
+            print(cmd)
             if subprocess.call(shlex.split(cmd)) > 0:
                 raise Exception("Command '{}' failed".format(cmd))
 
@@ -139,12 +145,13 @@ class Mod(object):
 
 class Rewrite(Mod):
     def __init__(self, name, name2):
+        self.name = name
         if '%?' in name:
-            self.name = pattern_to_re(name)
+            self.regex = pattern_to_re(name)
         else:
-            self.name = name
             if '%?' in name2:
                 raise Exception("'%?' not allowed in non-pattern name")
+            self.regex = None
 
         self.name2 = name2
 
@@ -161,10 +168,11 @@ class Rewrite(Mod):
 
 class AddDir(Mod):
     def __init__(self, name, directory):
+        self.name = name
         if '%?' in name:
-            self.name = pattern_to_re(name)
+            self.regex = pattern_to_re(name)
         else:
-            self.name = name
+            self.regex = None
         self.dir = directory
 
     def modify(self, name):

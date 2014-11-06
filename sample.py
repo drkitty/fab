@@ -6,11 +6,11 @@ g = Group(
         Rewrite('%?.o', '.obj/%?.o'),
     ],
     rules=[
-        Rule('x', ('touch x',), deps=('a.c', 'b.c')),
-        Rule('%?.o', ('touch %?.o',), deps=('%?.c',), rules=[
+        Rule('x', ('touch x',), deps=('a.o', 'b.o')),
+        Rule('%?.o', ('touch %@',), deps=('%?.c',), rules=[
             Rule('%?.c', ideps=('%?.h',)),
         ]),
     ],
 )
 
-g.build('a.o')
+g.build('x')
