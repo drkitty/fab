@@ -113,19 +113,16 @@ class Rule(Group):
             if dep_mtime > mtime:
                 stale = True
 
-        if not stale:
+        if stale:
+            self.run_commands(name)
+            mtime = get_mtime(name)
+        else:
             for idep in ideps:
                 print("Looking at idep '{}' of {}".format(
                     idep, repr(self)))
                 idep_mtime = get_mtime(idep)
                 if idep_mtime > mtime:
-                    stale = True
                     mtime = max(mtime, idep_mtime)
-                    break
-
-        if stale:
-            self.run_commands(name)
-            mtime = get_mtime(name)
 
         return mtime
 
