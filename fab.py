@@ -21,14 +21,20 @@ class Group(object):
     parent = None
 
     def __init__(self, *, mods=[], rules=[]):
-        for mod in mods:
-            mod.parent = self
         self.mods = mods
-        for rule in rules:
-            rule.parent = self
         self.rules = rules
+        for rule in self.rules:
+            rule.parent = self
 
-    def search(self, name):
+    def setup(self, mods=None):
+        if mods:
+            mods = mods + self.mods
+        else:
+            mods = self.mods[:]
+        for rule in self.rules:
+            rule.setup(self.mods)
+
+    def search(self, name, *, ascend=True):
         for rule in self.rules:
             if rule.regex:
                 if rule.regex.match(name):
@@ -56,20 +62,41 @@ class Group(object):
 
 
 class Rule(Group):
-    def __init__(self, name, cmds=(), deps=(), ideps=(), **kwargs):
-        super().__init__(**kwargs)
-
+    def __init__(self, name, cmds=(), deps=(), ideps=(), child=None):
         self.name = name
-        if '%?' in name:
-            self.regex = pattern_to_re(name)
-        else:
-            self.regex = None
         self.cmds = cmds
         self.deps = deps
         self.ideps = ideps
+        self.child = child
 
     def __repr__(self):
         return "<Rule: '{}'>".format(self.name)
+
+    def setup(self, mods):
+        for mod in mods:
+            self.name = mod.modify(self.name)
+            for i in range(len(self.deps)):
+                self.deps[i] = mod.modify(self.deps[i])
+            for i in range(len(self.ideps)):
+                self.ideps[i] = mod.modify(self.ideps[i])
+        self.create_regex()
+        if self.child:
+            self.child.setup(mods)
+
+    def search(self, name, *, ascend=True):
+        if self.child:
+            rule = self.child.search(name, ascend=False)
+            if rule:
+                return rule
+        if ascend and self.parent:
+            return self.parent.search(name)
+        return None
+
+    def create_regex(self):
+        if '%?' in self.name:
+            self.regex = pattern_to_re(self.name)
+        else:
+            self.regex = None
 
     def build(self, name):
         """Build `name` if possible and necessary
@@ -81,7 +108,7 @@ class Rule(Group):
 
         if self.regex:
             m = self.regex.match(name)
-            if m is None:
+            if not m:
                 return None
             q = m.group(1)
 
@@ -104,7 +131,7 @@ class Rule(Group):
 
         for dep in deps:
             dep_rule = self.search(dep)
-            if dep_rule is None:
+            if not dep_rule:
                 return None
             print("Looking at dep '{}' of {}".format(dep, repr(self)))
             dep_mtime = dep_rule.build(dep)
@@ -152,14 +179,17 @@ class Rewrite(Mod):
 
         self.name2 = name2
 
+    def __repr__(self):
+        return '<Rewrite: "{}" -> "{}">'.format(self.name, self.name2)
+
     def modify(self, name):
-        if isinstance(self.name, str):
+        if self.regex:
+            m = self.regex.match(name)
+            if m:
+                return self.name2.replace('%?', m.group(1))
+        else:
             if self.name == name:
                 return self.name2
-        else:
-            m = self.name.match(name)
-            if m is not None:
-                return self.name2.replace('%?', m.group(0))
         return name
 
 
