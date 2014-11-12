@@ -45,16 +45,13 @@ class Group(object):
         if self.parent:
             return self.parent.search(name)
 
-    def modify(self, name):
+    def modify(self, x):
         for mod in self.mods:
-            name = mod.modify(name)
+            mod.modify(x)
         if self.parent:
-            name = self.parent.modify(name)
-        return name
+            self.parent.modify(x)
 
     def build(self, name):
-        name = self.modify(name)
-
         for rule in self.rules:
             mtime = rule.build(name)
             if mtime:
@@ -74,11 +71,7 @@ class Rule(Group):
 
     def setup(self, mods):
         for mod in mods:
-            self.name = mod.modify(self.name)
-            for i in range(len(self.deps)):
-                self.deps[i] = mod.modify(self.deps[i])
-            for i in range(len(self.ideps)):
-                self.ideps[i] = mod.modify(self.ideps[i])
+            mod.modify(self)
         self.create_regex()
         if self.child:
             self.child.setup(mods)
@@ -163,8 +156,15 @@ class Rule(Group):
 
 
 class Mod(object):
-    def modify(self, name):
-        pass
+    def modify(self, x):
+        raise Exception('Not implemented')
+
+    def apply(self, x, *, func):
+        x.name = func(x.name)
+        for i in range(len(x.deps)):
+            x.deps[i] = func(x.deps[i])
+        for i in range(len(x.ideps)):
+            x.ideps[i] = func(x.ideps[i])
 
 
 class Rewrite(Mod):
@@ -182,15 +182,22 @@ class Rewrite(Mod):
     def __repr__(self):
         return '<Rewrite: "{}" -> "{}">'.format(self.name, self.name2)
 
-    def modify(self, name):
+    def modify(self, x):
         if self.regex:
-            m = self.regex.match(name)
-            if m:
-                return self.name2.replace('%?', m.group(1))
+            def m(s):
+                h = self.regex.match(s)
+                if h:
+                    return self.name2.replace('%?', h.group(1))
+                else:
+                    return s
         else:
-            if self.name == name:
-                return self.name2
-        return name
+            def m(s):
+                if self.name == s:
+                    return self.name2
+                else:
+                    return s
+
+        self.apply(x, func=m)
 
 
 class AddDir(Mod):
@@ -202,11 +209,18 @@ class AddDir(Mod):
             self.regex = None
         self.dir = directory
 
-    def modify(self, name):
-        if isinstance(self.name, str):
-            if self.name == name:
-                return path.join(self.dir, name)
+    def modify(self, x):
+        if self.regex:
+            def m(s):
+                if self.regex.match(s) == s:
+                    return path.join(self.dir, s)
+                else:
+                    return s
         else:
-            if self.name.match(name):
-                return path.join(self.dir, name)
-        return name
+            def m(s):
+                if self.name == s:
+                    return path.join(self.dir, s)
+                else:
+                    return s
+
+        self.apply(x, func=m)
