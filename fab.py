@@ -28,9 +28,9 @@ class Group(object):
 
     def setup(self, mods=None):
         if mods:
-            mods = mods + self.mods
+            mods = mods + self.mods  # copy
         else:
-            mods = self.mods[:]
+            mods = self.mods[:]  # copy
         for rule in self.rules:
             rule.setup(self.mods)
 
@@ -151,7 +151,7 @@ class Rule(Group):
             if name:
                 cmd = cmd.replace('%@', name)
             print(cmd)
-            if subprocess.call(shlex.split(cmd)) > 0:
+            if subprocess.call(shlex.split(cmd), posix=True) > 0:
                 raise Exception("Command '{}' failed".format(cmd))
 
 
