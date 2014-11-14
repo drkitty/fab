@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from parser import char, End, FileStream, Invalid, parse
+from fab.parser import char, End, FileStream, Invalid, parse
 
 
 class Header(object):

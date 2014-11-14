@@ -1,4 +1,4 @@
-from fab import Group, Rewrite, Rule
+from fab.core import Group, Rewrite, Rule
 
 
 g = Group(

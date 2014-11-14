@@ -3,6 +3,8 @@ import subprocess
 import shlex
 from os import path, stat
 
+from . import DEBUG
+
 
 def get_mtime(name):
     try:
@@ -97,7 +99,8 @@ class Rule(Group):
         Returns the mtime of `name` if it's now up to date, or 0 otherwise.
         """
 
-        print("Considering building '{}' with {}".format(name, repr(self)))
+        if DEBUG:
+            print("Considering building '{}' with {}".format(name, repr(self)))
 
         if self.regex:
             m = self.regex.match(name)
@@ -126,7 +129,8 @@ class Rule(Group):
             dep_rule = self.search(dep)
             if not dep_rule:
                 return None
-            print("Looking at dep '{}' of {}".format(dep, repr(self)))
+            if DEBUG:
+                print("Looking at dep '{}' of {}".format(dep, repr(self)))
             dep_mtime = dep_rule.build(dep)
             if not dep_mtime:
                 return 0
@@ -138,8 +142,9 @@ class Rule(Group):
             mtime = get_mtime(name)
         else:
             for idep in ideps:
-                print("Looking at idep '{}' of {}".format(
-                    idep, repr(self)))
+                if DEBUG:
+                    print("Looking at idep '{}' of {}".format(
+                        idep, repr(self)))
                 idep_mtime = get_mtime(idep)
                 if idep_mtime > mtime:
                     mtime = max(mtime, idep_mtime)
