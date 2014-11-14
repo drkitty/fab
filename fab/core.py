@@ -156,7 +156,7 @@ class Rule(Group):
             if name:
                 cmd = cmd.replace('%@', name)
             print(cmd)
-            if subprocess.call(shlex.split(cmd), posix=True) > 0:
+            if subprocess.call(shlex.split(cmd, posix=True)) > 0:
                 raise Exception("Command '{}' failed".format(cmd))
 
 
